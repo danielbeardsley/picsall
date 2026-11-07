@@ -1,0 +1,10 @@
+{
+  "name": "picsall",
+  "private": true,
+  "type": "module",
+  "description": "A slow-scan camera for the browser. No build step, no runtime dependencies.",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "test": "node --test"
+  }
+}
