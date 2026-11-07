@@ -455,15 +455,11 @@ button {
   clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 
-/* Stopping only appears once paused, so a stray tap can't lose a picture */
+/* Stopping only appears once paused, so a stray tap can't lose a picture.
+   main.js shows and hides it. */
 #stop {
   grid-area: tools;
   justify-self: start;
-  display: none;
-}
-
-[data-state="paused"] #stop {
-  display: inline-flex;
 }
 
 /* The viewer */

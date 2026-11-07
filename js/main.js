@@ -53,6 +53,8 @@ let lastShutterTap = -Infinity;
 function setState(state) {
   document.body.dataset.state = state;
   elements.shutter.setAttribute('aria-label', SHUTTER_LABELS[state] ?? 'Take picture');
+  // Not left to the stylesheet, so a stale cached copy can't show it at the wrong time.
+  elements.stop.hidden = state !== 'paused';
 }
 
 function currentState() {
