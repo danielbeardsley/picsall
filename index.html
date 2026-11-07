@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Picsall: the slow-scan camera</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23201a33'/%3E%3Crect y='14' width='32' height='4' fill='%23ffd23f'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body data-state="starting">
+  <main id="stage">
+    <video id="live" autoplay playsinline muted></video>
+    <canvas id="film" width="0" height="0"></canvas>
+    <div id="scanline" aria-hidden="true"></div>
+    <div id="countdown" role="timer"></div>
+  </main>
+
+  <section id="notice" aria-live="polite">
+    <p id="notice-text">Waking up the camera…</p>
+    <button id="retry" class="pill" type="button">Try again</button>
+  </section>
+
+  <p id="toast" role="status"></p>
+
+  <section id="hud" aria-label="Camera controls">
+    <div id="settings">
+      <fieldset id="direction">
+        <legend class="visually-hidden">Scan direction</legend>
+        <label title="Top to bottom">
+          <input type="radio" name="direction" value="down">
+          <svg viewBox="0 0 24 24" class="arrow" style="--turn: 0deg" role="img" aria-label="Top to bottom"><use href="#icon-arrow"/></svg>
+        </label>
+        <label title="Bottom to top">
+          <input type="radio" name="direction" value="up">
+          <svg viewBox="0 0 24 24" class="arrow" style="--turn: 180deg" role="img" aria-label="Bottom to top"><use href="#icon-arrow"/></svg>
+        </label>
+        <label title="Left to right">
+          <input type="radio" name="direction" value="right">
+          <svg viewBox="0 0 24 24" class="arrow" style="--turn: -90deg" role="img" aria-label="Left to right"><use href="#icon-arrow"/></svg>
+        </label>
+        <label title="Right to left">
+          <input type="radio" name="direction" value="left">
+          <svg viewBox="0 0 24 24" class="arrow" style="--turn: 90deg" role="img" aria-label="Right to left"><use href="#icon-arrow"/></svg>
+        </label>
+      </fieldset>
+
+      <label id="speed-control">
+        <span class="visually-hidden">Time to take the picture</span>
+        <span aria-hidden="true">🐇</span>
+        <input id="speed" type="range" min="0" step="1">
+        <span aria-hidden="true">🐢</span>
+        <output id="speed-value" for="speed"></output>
+      </label>
+
+      <button id="timer" class="tool" type="button" title="Self-timer">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-timer"/></svg>
+        <span id="timer-value"></span>
+      </button>
+    </div>
+
+    <div id="deck">
+      <ol id="recent" aria-label="Recent pictures"></ol>
+      <button id="shutter" type="button" aria-label="Take picture"><span></span></button>
+      <div id="tools">
+        <button id="switch-camera" class="tool" type="button" title="Switch camera" aria-label="Switch camera" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-switch"/></svg>
+        </button>
+        <button id="fullscreen" class="tool" type="button" title="Full screen" aria-label="Toggle full screen" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-fullscreen"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <dialog id="viewer" aria-label="Picture viewer">
+    <img id="viewer-image" alt="">
+    <button id="viewer-previous" class="tool nav" type="button" aria-label="Older picture">
+      <svg viewBox="0 0 24 24" class="arrow" style="--turn: 90deg" aria-hidden="true"><use href="#icon-arrow"/></svg>
+    </button>
+    <button id="viewer-next" class="tool nav" type="button" aria-label="Newer picture">
+      <svg viewBox="0 0 24 24" class="arrow" style="--turn: -90deg" aria-hidden="true"><use href="#icon-arrow"/></svg>
+    </button>
+    <footer>
+      <p id="viewer-caption"></p>
+      <div class="actions">
+        <a id="viewer-download" class="pill primary">Download</a>
+        <button id="viewer-close" class="pill" type="button">Back to camera</button>
+        <button id="viewer-delete" class="pill quiet" type="button">Delete</button>
+      </div>
+    </footer>
+  </dialog>
+
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+    <symbol id="icon-arrow" viewBox="0 0 24 24">
+      <path d="M12 4v15M5.5 12.5 12 19l6.5-6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-timer" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2M9.5 2.5h5"/>
+      </g>
+    </symbol>
+    <symbol id="icon-switch" viewBox="0 0 24 24">
+      <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 3.5v5h-5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20.5v-5h5"/>
+      </g>
+    </symbol>
+    <symbol id="icon-fullscreen" viewBox="0 0 24 24">
+      <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </svg>
+</body>
+</html>
