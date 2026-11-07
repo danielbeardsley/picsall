@@ -34,6 +34,8 @@ export class Scanner {
   #ctx;
   #stampCanvas = document.createElement('canvas');
   #stampCtx = this.#stampCanvas.getContext('2d');
+  /** Pauses and resumes the scan in progress, if there is one. */
+  #clock = null;
 
   constructor(video, canvas) {
     this.#video = video;
@@ -47,6 +49,16 @@ export class Scanner {
       canvas.width = 0;
       canvas.height = 0;
     }
+  }
+
+  /** Freezes the scan where it is. The live video keeps playing ahead of it. */
+  pause() {
+    this.#clock?.pause();
+  }
+
+  /** Carries on a paused scan from the line where it stopped. */
+  resume() {
+    this.#clock?.resume();
   }
 
   /**
@@ -84,6 +96,8 @@ export class Scanner {
    * Two clocks run during a scan. Camera frames decide when to capture, so each
    * frame is stamped once and fades blend two different moments. Animation
    * frames keep the scan line moving smoothly and end the scan on time.
+   * Pausing stops both, and resuming moves the start time on by the length of
+   * the pause, so the scan carries on as if no time had passed.
    */
   #runClock({ durationMs, total, captureUpTo, signal, onProgress }) {
     const video = this.#video;
@@ -91,8 +105,9 @@ export class Scanner {
     const captureAfterMs = hasFrameCallbacks ? STALLED_CAMERA_MS : 0;
 
     return new Promise((resolve, reject) => {
-      const startedAt = performance.now();
+      let startedAt = performance.now();
       let lastCapture = startedAt;
+      let pausedAt = null;
       let done = 0;
       let animationFrame;
       let cameraFrame;
@@ -102,9 +117,19 @@ export class Scanner {
         done = captureUpTo(now - startedAt);
       };
 
-      const stop = () => {
+      const schedule = () => {
+        if (hasFrameCallbacks) cameraFrame = video.requestVideoFrameCallback(onCameraFrame);
+        animationFrame = requestAnimationFrame(onAnimationFrame);
+      };
+
+      const cancel = () => {
         cancelAnimationFrame(animationFrame);
         if (hasFrameCallbacks) video.cancelVideoFrameCallback(cameraFrame);
+      };
+
+      const stop = () => {
+        cancel();
+        this.#clock = null;
         signal.removeEventListener('abort', onAbort);
       };
 
@@ -130,9 +155,24 @@ export class Scanner {
         }
       };
 
+      this.#clock = {
+        pause() {
+          if (pausedAt !== null) return;
+          pausedAt = performance.now();
+          cancel();
+        },
+        resume() {
+          if (pausedAt === null) return;
+          const now = performance.now();
+          startedAt += now - pausedAt;
+          lastCapture = now;
+          pausedAt = null;
+          schedule();
+        },
+      };
+
       signal.addEventListener('abort', onAbort, { once: true });
-      if (hasFrameCallbacks) cameraFrame = video.requestVideoFrameCallback(onCameraFrame);
-      animationFrame = requestAnimationFrame(onAnimationFrame);
+      schedule();
     });
   }
 

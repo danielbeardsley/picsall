@@ -122,8 +122,21 @@ usually want to press the button and then get into position, particularly with
 a laptop on a table.
 
 ### Controls disappear during a capture
-Only a small stop button stays, which doubles as a progress ring, so the view is
-as close to full screen as possible. The button isn't part of the picture.
+Only the shutter stays, shrunk to a progress ring, so the view is as close to
+full screen as possible. The button isn't part of the picture.
+
+### The shutter pauses a scan, and stopping takes a pause first
+During a scan the shutter is a pause button, and while paused it's a play
+button. Pausing freezes the line and the clock: when it resumes, the scan carries
+on from the same line at the same speed, as if no time had passed. The live video
+keeps playing ahead of the line, so a pause is a chance to move things around.
+The seam where it resumed is blended like any other band (see the smoothness
+setting above), so with Smooth it's soft rather than a hard cut.
+The stop button (✕) only shows while paused, so a stray tap can't throw away a
+picture. Esc still stops at any time. During the self-timer countdown the
+shutter stays a stop button, since pausing a countdown doesn't mean much.
+The screen is allowed to sleep while paused.
+**Revisit if** kids would rather stop in one tap, or want to pause the countdown.
 
 ### Stopping discards the picture
 Stop or Esc throws away the partial scan, rather than saving a half-finished
@@ -131,14 +144,16 @@ image with a transparent or black remainder.
 **Revisit if** half-pictures turn out to be interesting. Keeping them would need
 a decision about what fills the unscanned part.
 
-### Taps within half a second of starting don't stop the capture
+### Shutter taps within half a second of the last one are ignored
 Otherwise a double-tap on the shutter, common with kids, starts and instantly
-cancels. Esc isn't affected.
+cancels, or pauses and instantly resumes. Esc and the ✕ aren't affected.
 
-### Scans stop if the app is hidden or the camera changes shape
-Animation frames pause in a hidden tab, and rotating a phone changes the shape
-of the camera frame, so neither can produce a sensible picture. The scan is
-abandoned with a message.
+### Hiding the app pauses a scan; the camera changing shape stops it
+Animation frames don't run in a hidden tab, so switching apps pauses the scan,
+and it waits for play when you come back. A countdown in progress is stopped
+instead. Rotating a phone changes the shape of the camera frame, which can't
+produce a sensible picture, so that abandons the scan with a message, even when
+paused.
 **Revisit if** you want to rotate the phone during a scan on purpose, as a
 creative effect. Locking the orientation would be a start.
 

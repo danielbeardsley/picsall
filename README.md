@@ -32,7 +32,12 @@ are all static files) or use an https tunnel.
   Dreamy smear more and more, like motion blur.
 - Press the **shutter**, or the space bar. The self-timer button sets the delay
   before the scan starts, and it can be turned off.
-- Press the **stop** button or Esc to abandon a picture.
+- While the picture is being taken, the shutter becomes a **pause** button (or
+  press the space bar). The scan freezes where it is and the camera keeps playing
+  ahead of the line, so you can rearrange things and press **play** to carry on.
+  Switching away from the app pauses it too.
+- To throw a picture away, pause it and press the **✕**, or press Esc at any
+  time. During the self-timer, the shutter is a stop button.
 - The last **5 pictures** appear as thumbnails and stay after a reload. Open one
   to download or delete it.
 
@@ -47,7 +52,7 @@ are all static files) or use an https tunnel.
 | `js/controls.js`, `js/settings.js` | Settings controls and remembering them |
 | `js/gallery.js`, `js/photo-store.js` | Recent pictures and their storage |
 | `js/viewer.js` | Full-screen picture viewer |
-| `js/countdown.js`, `js/wake-lock.js` | Self-timer numbers, keeping the screen on |
+| `js/countdown.js`, `js/wake-lock.js` | Self-timer numbers, keeping the screen on while scanning |
 
 `npm test` runs the unit tests with Node's built-in test runner.
 

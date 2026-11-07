@@ -102,8 +102,20 @@ button {
   left: calc(var(--position) * 100%);
 }
 
-[data-state="scanning"] #scanline {
+[data-state="scanning"] #scanline,
+[data-state="paused"] #scanline {
   opacity: 1;
+}
+
+/* A paused line breathes, so it doesn't look like the app froze */
+[data-state="paused"] #scanline {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
 }
 
 [data-state="starting"] #scanline,
@@ -394,19 +406,24 @@ button {
   transition: width var(--ease), height var(--ease), border-radius var(--ease);
 }
 
-/* While capturing, nothing gets in the way of the picture except a stop button */
+/* While capturing, nothing gets in the way of the picture except the shutter:
+   a stop button during the countdown, then pause and resume during the scan */
 
 [data-state="countdown"] #settings,
 [data-state="scanning"] #settings,
+[data-state="paused"] #settings,
 [data-state="countdown"] #recent,
 [data-state="scanning"] #recent,
+[data-state="paused"] #recent,
 [data-state="countdown"] #tools,
-[data-state="scanning"] #tools {
+[data-state="scanning"] #tools,
+[data-state="paused"] #tools {
   visibility: hidden;
 }
 
 [data-state="countdown"] #shutter,
-[data-state="scanning"] #shutter {
+[data-state="scanning"] #shutter,
+[data-state="paused"] #shutter {
   width: 60px;
   height: 60px;
   margin: 12px;
@@ -414,12 +431,39 @@ button {
 }
 
 [data-state="countdown"] #shutter span,
-[data-state="scanning"] #shutter span {
+[data-state="scanning"] #shutter span,
+[data-state="paused"] #shutter span {
   width: 24px;
   height: 24px;
   border: 0;
   border-radius: 6px;
   background: var(--ink);
+}
+
+/* Pause: two bars */
+[data-state="scanning"] #shutter span {
+  width: 22px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--ink) 36%, transparent 36% 64%, var(--ink) 64%);
+}
+
+/* Resume: a play triangle, nudged right so it looks centred */
+[data-state="paused"] #shutter span {
+  width: 22px;
+  border-radius: 0;
+  translate: 2px 0;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* Stopping only appears once paused, so a stray tap can't lose a picture */
+#stop {
+  grid-area: tools;
+  justify-self: start;
+  display: none;
+}
+
+[data-state="paused"] #stop {
+  display: inline-flex;
 }
 
 /* The viewer */
@@ -558,5 +602,6 @@ button {
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+    animation: none !important;
   }
 }

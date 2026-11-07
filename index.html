@@ -68,6 +68,9 @@
     <div id="deck">
       <ol id="recent" aria-label="Recent pictures"></ol>
       <button id="shutter" type="button" aria-label="Take picture"><span></span></button>
+      <button id="stop" class="tool" type="button" title="Throw this picture away" aria-label="Stop and throw this picture away">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-close"/></svg>
+      </button>
       <div id="tools">
         <button id="switch-camera" class="tool" type="button" title="Switch camera" aria-label="Switch camera" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-switch"/></svg>
@@ -113,6 +116,9 @@
       <g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
         <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 3.5v5h-5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20.5v-5h5"/>
       </g>
+    </symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24">
+      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
     </symbol>
     <symbol id="icon-fullscreen" viewBox="0 0 24 24">
       <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>

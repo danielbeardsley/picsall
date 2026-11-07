@@ -1,8 +1,11 @@
 // Wires everything together and owns the app's state:
 //
 //   starting -> ready -> countdown -> scanning -> review -> ready
+//                                       ^  |
+//                                       paused
 //
-// plus `no-camera`, entered from starting. The state lives on <body
+// plus `no-camera`, entered from starting. Stopping from countdown, scanning,
+// or paused goes back to ready. The state lives on <body
 // data-state> because the stylesheet decides what is visible in each one.
 
 import { Camera, describeCameraError } from './camera.js';
@@ -13,7 +16,7 @@ import { openPhotoStore } from './photo-store.js';
 import { DIRECTIONS, scanPosition } from './scan-geometry.js';
 import { Scanner } from './scanner.js';
 import { Viewer } from './viewer.js';
-import { keepScreenOn } from './wake-lock.js';
+import { ScreenLock } from './wake-lock.js';
 
 const elements = {
   stage: document.querySelector('#stage'),
@@ -25,6 +28,7 @@ const elements = {
   retry: document.querySelector('#retry'),
   toast: document.querySelector('#toast'),
   shutter: document.querySelector('#shutter'),
+  stop: document.querySelector('#stop'),
   switchCamera: document.querySelector('#switch-camera'),
   fullscreen: document.querySelector('#fullscreen'),
 };
@@ -34,16 +38,25 @@ const scanner = new Scanner(elements.video, elements.film);
 const controls = new Controls(() => showScanline(0));
 const gallery = new Gallery(await openPhotoStore(), document.querySelector('#recent'), openPhoto);
 const viewer = new Viewer(document.querySelector('#viewer'), gallery, onViewerClosed);
+const screenLock = new ScreenLock();
 
-/** A second tap this soon after starting is a double-tap, not a request to stop. */
+/** A second shutter tap this soon after the last one is a double-tap, and is ignored. */
 const DOUBLE_TAP_MS = 500;
+
+/** What the shutter does in each state, when it isn't taking a picture. */
+const SHUTTER_LABELS = { countdown: 'Stop', scanning: 'Pause', paused: 'Resume' };
 
 /** Aborts the capture in progress, if there is one. */
 let capture = null;
-let captureStartedAt = 0;
+let lastShutterTap = -Infinity;
 
 function setState(state) {
   document.body.dataset.state = state;
+  elements.shutter.setAttribute('aria-label', SHUTTER_LABELS[state] ?? 'Take picture');
+}
+
+function currentState() {
+  return document.body.dataset.state;
 }
 
 function showToast(message) {
@@ -85,11 +98,9 @@ async function takePicture() {
   const { signal } = controller;
   const { direction, seconds, timer, smoothness } = controls.value;
   capture = controller;
-  captureStartedAt = performance.now();
-  const allowSleep = await keepScreenOn();
+  screenLock.hold();
 
   try {
-    signal.throwIfAborted();
     setState('countdown');
     await runCountdown(elements.countdown, timer, signal);
 
@@ -117,8 +128,20 @@ async function takePicture() {
     }
   } finally {
     capture = null;
-    allowSleep();
+    screenLock.release();
   }
+}
+
+function pauseScan() {
+  scanner.pause();
+  setState('paused');
+  screenLock.release();
+}
+
+function resumeScan() {
+  screenLock.hold();
+  setState('scanning');
+  scanner.resume();
 }
 
 function returnToReady() {
@@ -137,11 +160,16 @@ function onViewerClosed() {
 }
 
 function onShutter() {
-  if (capture) {
-    if (performance.now() - captureStartedAt > DOUBLE_TAP_MS) capture.abort();
-  } else if (document.body.dataset.state === 'ready') {
-    takePicture();
-  }
+  const now = performance.now();
+  if (now - lastShutterTap < DOUBLE_TAP_MS) return;
+
+  const state = currentState();
+  if (state === 'ready' && !capture) takePicture();
+  else if (state === 'countdown') capture?.abort();
+  else if (state === 'scanning') pauseScan();
+  else if (state === 'paused') resumeScan();
+  else return;
+  lastShutterTap = now;
 }
 
 async function onSwitchCamera() {
@@ -169,14 +197,19 @@ function onKeyDown(event) {
 }
 
 elements.shutter.addEventListener('click', onShutter);
+elements.stop.addEventListener('click', () => capture?.abort());
 elements.retry.addEventListener('click', startCamera);
 elements.switchCamera.addEventListener('click', onSwitchCamera);
 document.addEventListener('keydown', onKeyDown);
 
-// A scan can't survive either of these: animation frames stop in a hidden tab,
-// and rotating a phone changes the shape of the camera frame mid-picture.
+// Animation frames stop in a hidden tab, so a scan pauses until the app is
+// back. A countdown can't sensibly pause, so it stops instead. Rotating a phone
+// changes the shape of the camera frame mid-picture, which no scan can survive.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) capture?.abort('Scan stopped because the app was hidden.');
+  if (!document.hidden) return;
+  const state = currentState();
+  if (state === 'scanning') pauseScan();
+  else if (state === 'countdown') capture?.abort('Picture stopped because the app was hidden.');
 });
 elements.video.addEventListener('resize', () => {
   capture?.abort('Scan stopped because the camera view changed.');
