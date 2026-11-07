@@ -7,26 +7,61 @@ way. Each one says why it was made and what would be a good reason to revisit it
 
 ### Transparent canvas stacked on the live video
 The `<video>` plays full screen, with a canvas on top that starts transparent.
-Each frame copies only the newly scanned lines onto the canvas. The canvas is
+Each camera frame copies only the newly scanned lines onto the canvas. The canvas is
 both the display and the final picture, so there's no per-frame redraw of the
 whole screen and no separate compositing step.
 **Revisit if** we want effects on the live part (filters, say), which would
 need everything drawn into one canvas or WebGL.
 
-### Driven by `requestAnimationFrame` and the clock
-Each animation frame works out how many lines should be done by now, and copies
-whatever is missing from the current video frame. Tying the scan to the clock
-means the total time is always honoured, even if the frame rate dips.
-`requestVideoFrameCallback` would run once per new camera frame, but it isn't
-universal and the scan line would move at camera rate rather than screen rate.
+### Two clocks: camera frames capture, animation frames animate
+Each new camera frame (`requestVideoFrameCallback`) works out how many lines
+should be done by now and stamps the missing ones. Capturing per camera frame,
+rather than per screen refresh, means each stamp is a different moment, which is
+what makes blending work (below). Animation frames move the scan line smoothly
+and end the scan exactly on time, so the total time is honoured even if the
+camera stalls. If no camera frame arrives for 250ms they capture anyway.
+Browsers without frame callbacks capture on every animation frame instead,
+which still works, but blends between some identical frames.
 
-### Fast scans capture bands, not single lines
-A camera gives about 30 different frames a second, so a scan can only have about
-30 distinct moments per second. A 1 second scan of 1080 lines copies around 18
-lines per animation frame, which shows up as visible steps on fast-moving
-subjects. Slow scans really are one line at a time: 18 lines a second at 60s.
-**Revisit if** the steps on fast scans look bad. Blending between frames could
-smooth them, at the cost of the crisp slit-scan look.
+### Fast scans: steps, and blending them away
+A camera delivers 30 or 60 distinct moments a second, so each frame has to fill a
+band of lines, and anything moving shows a step at each band's edge. For 1080
+lines the step is 36 lines on a 1s scan at 30fps, 7 at 5s, and under one line
+from about 36s. (An earlier version of this file said 18 for 1s at 30fps, which
+was per screen refresh, not per camera frame.)
+
+Three things shrink the steps:
+
+- **Asking for 60fps** halves them on cameras that can do it (see below).
+- **Blending:** each new band also reaches back over lines already captured and
+  fades in across them, from transparent to solid. With the fade spanning
+  exactly the previous band, every line becomes a mix of the two camera frames
+  nearest its moment, and the steps disappear. In a test with a smooth brightness
+  ramp, the biggest jump between neighbouring lines fell from 8 levels to 2-3,
+  and the hard step edges went from 29 to 0.
+- **The smoothness setting** picks how many bands back the fade reaches:
+  Sharp 0, which is the original hard slices, Smooth 1 (the default), Softer 2,
+  and Dreamy 3, which smears like motion blur.
+
+The fade spans the bands' real start lines, not a fixed width, so it stays
+seamless when the frame rate wobbles or drops in low light.
+
+**Limits:** blending adds no new information. A fast-moving edge becomes a
+soft, ghosted staircase, with two faint copies cross-fading, rather than a clean
+diagonal. Only generating in-between frames from estimated motion (optical flow)
+could fix that, and it was judged too big and too likely to warp faces.
+On slow scans, Smooth half-blends each line with the one before it. That's barely
+visible, but strictly speaking the line is no longer a single moment.
+**Revisit if** Smooth looks wrong as the default, or Dreamy isn't dreamy enough.
+Wider levels are just more stops in `SMOOTHNESS_STOPS` in `settings.js`.
+
+### Stamps go through a full-size offscreen canvas
+Each stamp is drawn from video to an offscreen canvas, where the fade is masked
+in, then onto the picture. A canvas only as big as the band would use less
+memory, but measured in headless Chromium it made no difference to frame
+pacing, so the simpler version stayed. Neither has been profiled on a real
+phone.
+**Revisit if** scans stutter on low-end phones.
 
 ### Linear speed
 The line moves at a constant rate.
@@ -63,11 +98,16 @@ Much smaller than PNG for camera images, with no obvious loss at
 normal viewing. The quality is `JPEG_QUALITY` in `scanner.js`.
 **Revisit if** the fine line detail ever looks smeared.
 
-### Asks for 1920x1080
-A request, not a guarantee; the camera gives its closest match. Higher would cost
-little during the scan, because each frame only copies a thin band, but it would
-make the live preview heavier on older phones and take more storage.
-**Revisit if** you want bigger prints.
+### Asks for 1920x1080 at 60fps
+A request, not a guarantee; the camera gives its closest match. 60fps halves the
+steps on fast scans. Because the browser weighs resolution and frame rate
+together, a camera offering only 1080p at 30fps or 720p at 60fps should keep
+1080p at 30. With Chromium's fake camera, 60fps came through at full 1080p. Real
+cameras haven't been tested, and decoding 60fps costs more power on phones.
+Higher resolution would cost little during the scan, because each frame only
+copies a thin band, but it would make the live preview heavier and take more
+storage.
+**Revisit if** you want bigger prints, or a phone runs hot or drops frames.
 
 ## Capture flow
 
@@ -136,6 +176,11 @@ files. `package.json` only exists to name the `start` and `test` scripts.
 `npm test` covers the scan maths, settings, and store. Anything needing a real
 camera was verified by a throwaway browser script, not committed, because it
 would add Playwright as a dependency.
+The throwaway scripts used synthetic camera clips, a brightness ramp and a
+moving bar, to measure each line's capture moment directly from the canvas.
+Headless Chromium on this machine stalls for up to about 1.4s now and then at
+1080p, with or without the blending change, so frame pacing numbers from it
+are noise, not a benchmark.
 **Revisit if** the scanner starts changing often, since a committed browser test
 using Chromium's fake camera flags would be worthwhile then.
 

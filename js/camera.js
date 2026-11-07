@@ -1,6 +1,11 @@
 // Owns the camera stream and feeds it to the <video> element.
 
-const RESOLUTION = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+// A faster camera means more distinct moments, and so smaller steps on fast scans.
+const QUALITY = {
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  frameRate: { ideal: 60 },
+};
 
 export class Camera {
   #video;
@@ -49,7 +54,7 @@ export class Camera {
     this.#stream?.getTracks().forEach((track) => track.stop());
     this.#stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
-      video: { ...RESOLUTION, ...constraints },
+      video: { ...QUALITY, ...constraints },
     });
     this.#video.srcObject = this.#stream;
     await this.#video.play();

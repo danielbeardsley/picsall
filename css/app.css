@@ -358,6 +358,12 @@ button {
   height: 24px;
 }
 
+/* Wide enough for the longest label, so the row doesn't shift while cycling */
+#smoothness-value {
+  min-width: 3.6em;
+  text-align: left;
+}
+
 #shutter {
   --progress: 0;
   grid-area: shutter;

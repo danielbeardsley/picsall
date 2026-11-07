@@ -1,13 +1,20 @@
 // The heart of the app: builds a picture one scan line at a time.
 //
-// The canvas sits on top of the live video and starts out transparent. Each
-// animation frame copies the lines the scan has just passed from the current
-// video frame onto the canvas. Those lines are now frozen, and the live video
-// keeps showing through everywhere the scan hasn't reached yet.
+// The canvas sits on top of the live video and starts out transparent. Each new
+// camera frame stamps the lines the scan has just passed onto the canvas. Those
+// lines are now frozen, and the live video keeps showing through everywhere the
+// scan hasn't reached yet.
+//
+// A camera only delivers so many frames a second, so a fast scan stamps many
+// lines at once, leaving a visible step on anything moving. To hide those steps,
+// a stamp can also reach back over lines already captured, fading in across
+// them. Stamps go through an offscreen canvas where that fade gets applied.
 
 import {
   bandRect,
   coverCrop,
+  fadeAxis,
+  fadeStart,
   lineCount,
   linesDone,
   mirrorRect,
@@ -15,10 +22,18 @@ import {
 
 const JPEG_QUALITY = 0.92;
 
+/**
+ * If no camera frame has arrived for this long, capture anyway so the scan keeps
+ * moving. Without frame callbacks, every animation frame has to capture instead.
+ */
+const STALLED_CAMERA_MS = 250;
+
 export class Scanner {
   #video;
   #canvas;
   #ctx;
+  #stampCanvas = document.createElement('canvas');
+  #stampCtx = this.#stampCanvas.getContext('2d');
 
   constructor(video, canvas) {
     this.#video = video;
@@ -28,47 +43,35 @@ export class Scanner {
 
   /** Removes the picture so the live video shows again. */
   clear() {
-    this.#canvas.width = 0;
-    this.#canvas.height = 0;
+    for (const canvas of [this.#canvas, this.#stampCanvas]) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
   }
 
   /**
    * Runs one scan. Resolves with { blob, width, height } when it finishes and
    * rejects with `signal.reason` if it is aborted.
    */
-  async scan({ direction, durationMs, mirrored, view, signal, onProgress }) {
+  async scan({ direction, durationMs, smoothness, mirrored, view, signal, onProgress }) {
     const crop = coverCrop(this.#video.videoWidth, this.#video.videoHeight, view.width, view.height);
-    this.#prepareCanvas(crop, mirrored);
+    this.#prepareCanvases(crop, mirrored);
 
     const total = lineCount(direction, crop.w, crop.h);
-    await new Promise((resolve, reject) => {
-      const startedAt = performance.now();
-      let done = 0;
-      let frame;
+    const bandStarts = [];
+    let done = 0;
 
-      const onAbort = () => {
-        cancelAnimationFrame(frame);
-        reject(signal.reason);
-      };
+    const captureUpTo = (elapsedMs) => {
+      const target = linesDone(elapsedMs, durationMs, total);
+      if (target <= done) return done;
+      const fadeFrom = fadeStart(bandStarts, done, smoothness);
+      this.#stamp({ direction, fadeFrom, from: done, to: target, crop, mirrored });
+      bandStarts.push(done);
+      done = target;
+      return done;
+    };
 
-      const tick = (now) => {
-        const target = linesDone(now - startedAt, durationMs, total);
-        if (target > done) {
-          this.#copyBand(bandRect(direction, done, target, crop.w, crop.h), crop, mirrored);
-          done = target;
-        }
-        onProgress(done / total);
-        if (done < total) {
-          frame = requestAnimationFrame(tick);
-        } else {
-          signal.removeEventListener('abort', onAbort);
-          resolve();
-        }
-      };
-
-      signal.addEventListener('abort', onAbort, { once: true });
-      frame = requestAnimationFrame(tick);
-    });
+    await this.#runClock({ durationMs, total, captureUpTo, signal, onProgress });
 
     const blob = await new Promise((resolve) => {
       this.#canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY);
@@ -77,17 +80,109 @@ export class Scanner {
     return { blob, width: crop.w, height: crop.h };
   }
 
-  #prepareCanvas(crop, mirrored) {
-    // Resizing also wipes the canvas and resets the context state set below.
-    this.#canvas.width = crop.w;
-    this.#canvas.height = crop.h;
-    this.#ctx.imageSmoothingEnabled = false;
-    // Mirror into the canvas itself, so the saved file matches the screen.
-    if (mirrored) this.#ctx.setTransform(-1, 0, 0, 1, crop.w, 0);
+  /**
+   * Two clocks run during a scan. Camera frames decide when to capture, so each
+   * frame is stamped once and fades blend two different moments. Animation
+   * frames keep the scan line moving smoothly and end the scan on time.
+   */
+  #runClock({ durationMs, total, captureUpTo, signal, onProgress }) {
+    const video = this.#video;
+    const hasFrameCallbacks = 'requestVideoFrameCallback' in video;
+    const captureAfterMs = hasFrameCallbacks ? STALLED_CAMERA_MS : 0;
+
+    return new Promise((resolve, reject) => {
+      const startedAt = performance.now();
+      let lastCapture = startedAt;
+      let done = 0;
+      let animationFrame;
+      let cameraFrame;
+
+      const capture = (now) => {
+        lastCapture = now;
+        done = captureUpTo(now - startedAt);
+      };
+
+      const stop = () => {
+        cancelAnimationFrame(animationFrame);
+        if (hasFrameCallbacks) video.cancelVideoFrameCallback(cameraFrame);
+        signal.removeEventListener('abort', onAbort);
+      };
+
+      const onAbort = () => {
+        stop();
+        reject(signal.reason);
+      };
+
+      const onCameraFrame = (now) => {
+        capture(now);
+        cameraFrame = video.requestVideoFrameCallback(onCameraFrame);
+      };
+
+      const onAnimationFrame = (now) => {
+        const elapsed = now - startedAt;
+        if (elapsed >= durationMs || now - lastCapture >= captureAfterMs) capture(now);
+        onProgress(Math.min(1, Math.max(0, elapsed / durationMs)));
+        if (done < total) {
+          animationFrame = requestAnimationFrame(onAnimationFrame);
+        } else {
+          stop();
+          resolve();
+        }
+      };
+
+      signal.addEventListener('abort', onAbort, { once: true });
+      if (hasFrameCallbacks) cameraFrame = video.requestVideoFrameCallback(onCameraFrame);
+      animationFrame = requestAnimationFrame(onAnimationFrame);
+    });
   }
 
-  #copyBand(band, crop, mirrored) {
-    const { x, y, w, h } = mirrored ? mirrorRect(band, crop.w) : band;
-    this.#ctx.drawImage(this.#video, crop.x + x, crop.y + y, w, h, x, y, w, h);
+  #prepareCanvases(crop, mirrored) {
+    // Resizing also wipes a canvas and resets the context state set below.
+    for (const canvas of [this.#canvas, this.#stampCanvas]) {
+      canvas.width = crop.w;
+      canvas.height = crop.h;
+    }
+    this.#ctx.imageSmoothingEnabled = false;
+    this.#stampCtx.imageSmoothingEnabled = false;
+    // Mirror on the way in, so the saved file matches the screen.
+    if (mirrored) this.#stampCtx.setTransform(-1, 0, 0, 1, crop.w, 0);
+  }
+
+  /** Puts lines [fadeFrom, to) of the current video frame onto the picture. */
+  #stamp({ direction, fadeFrom, from, to, crop, mirrored }) {
+    const region = bandRect(direction, fadeFrom, to, crop.w, crop.h);
+    const { x, y, w, h } = mirrored ? mirrorRect(region, crop.w) : region;
+    this.#stampCtx.drawImage(this.#video, crop.x + x, crop.y + y, w, h, x, y, w, h);
+
+    if (fadeFrom < from) {
+      this.#fadeIn(
+        bandRect(direction, fadeFrom, from, crop.w, crop.h),
+        fadeAxis(direction, fadeFrom, from, crop.w, crop.h),
+      );
+    }
+
+    this.#ctx.drawImage(
+      this.#stampCanvas,
+      region.x, region.y, region.w, region.h,
+      region.x, region.y, region.w, region.h,
+    );
+  }
+
+  /** Makes `rect` of the stamp ramp from transparent to solid along `axis`. */
+  #fadeIn(rect, { x0, y0, x1, y1 }) {
+    const ctx = this.#stampCtx;
+    const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
+    gradient.addColorStop(0, '#0000');
+    gradient.addColorStop(1, '#000');
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.fillStyle = gradient;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    ctx.restore();
   }
 }

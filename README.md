@@ -27,6 +27,9 @@ are all static files) or use an https tunnel.
 
 - Pick a **direction** with the arrows and a **speed** with the slider
   (1 to 60 seconds for the whole picture).
+- **Smoothness** (the wavy button) blends the steps that fast scans leave on
+  moving things: Sharp keeps hard slices, Smooth hides them, and Softer and
+  Dreamy smear more and more, like motion blur.
 - Press the **shutter**, or the space bar. The self-timer button sets the delay
   before the scan starts, and it can be turned off.
 - Press the **stop** button or Esc to abandon a picture.

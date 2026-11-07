@@ -83,7 +83,7 @@ async function startCamera() {
 async function takePicture() {
   const controller = new AbortController();
   const { signal } = controller;
-  const { direction, seconds, timer } = controls.value;
+  const { direction, seconds, timer, smoothness } = controls.value;
   capture = controller;
   captureStartedAt = performance.now();
   const allowSleep = await keepScreenOn();
@@ -97,6 +97,7 @@ async function takePicture() {
     const picture = await scanner.scan({
       direction,
       durationMs: seconds * 1000,
+      smoothness,
       mirrored: camera.mirrored,
       view: { width: elements.stage.clientWidth, height: elements.stage.clientHeight },
       signal,

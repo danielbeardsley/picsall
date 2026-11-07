@@ -4,6 +4,8 @@ import {
   DIRECTIONS,
   bandRect,
   coverCrop,
+  fadeAxis,
+  fadeStart,
   lineCount,
   linesDone,
   mirrorRect,
@@ -72,4 +74,41 @@ test('scanPosition runs backwards for reversed directions', () => {
   assert.equal(scanPosition('right', 0.25), 0.25);
   assert.equal(scanPosition('up', 0.25), 0.75);
   assert.equal(scanPosition('left', 0.25), 0.75);
+});
+
+test('fadeStart reaches back the requested number of bands', () => {
+  const starts = [0, 12, 20];
+  assert.equal(fadeStart(starts, 33, 1), 20);
+  assert.equal(fadeStart(starts, 33, 2), 12);
+  assert.equal(fadeStart(starts, 33, 3), 0);
+});
+
+test('fadeStart stops at the start of the picture', () => {
+  assert.equal(fadeStart([0, 12], 20, 3), 0);
+  assert.equal(fadeStart([], 0, 3), 0);
+});
+
+test('fadeStart gives no fade at smoothness 0', () => {
+  assert.equal(fadeStart([0, 12, 20], 33, 0), 33);
+});
+
+test('fadeAxis runs in scan order for every direction', () => {
+  assert.deepEqual(fadeAxis('down', 5, 9, 40, 30), { x0: 0, y0: 5, x1: 0, y1: 9 });
+  assert.deepEqual(fadeAxis('up', 5, 9, 40, 30), { x0: 0, y0: 25, x1: 0, y1: 21 });
+  assert.deepEqual(fadeAxis('right', 5, 9, 40, 30), { x0: 5, y0: 0, x1: 9, y1: 0 });
+  assert.deepEqual(fadeAxis('left', 5, 9, 40, 30), { x0: 35, y0: 0, x1: 31, y1: 0 });
+});
+
+test('fadeAxis spans the same lines as bandRect', () => {
+  for (const direction of Object.keys(DIRECTIONS)) {
+    const rect = bandRect(direction, 5, 9, 40, 30);
+    const { x0, y0, x1, y1 } = fadeAxis(direction, 5, 9, 40, 30);
+    const [low, high] = DIRECTIONS[direction].axis === 'y'
+      ? [Math.min(y0, y1), Math.max(y0, y1)]
+      : [Math.min(x0, x1), Math.max(x0, x1)];
+    const [rectLow, rectSize] = DIRECTIONS[direction].axis === 'y'
+      ? [rect.y, rect.h]
+      : [rect.x, rect.w];
+    assert.deepEqual([low, high], [rectLow, rectLow + rectSize], direction);
+  }
 });
