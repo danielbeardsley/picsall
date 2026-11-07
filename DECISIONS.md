@@ -59,7 +59,7 @@ they're treated as selfie cameras.
 **Revisit if** backwards text bothers you. A mirror toggle would fit here.
 
 ### JPEG at 0.92 quality
-About a tenth of the size of PNG for camera images, with no visible loss at
+Much smaller than PNG for camera images, with no obvious loss at
 normal viewing. The quality is `JPEG_QUALITY` in `scanner.js`.
 **Revisit if** the fine line detail ever looks smeared.
 
